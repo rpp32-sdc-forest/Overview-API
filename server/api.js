@@ -47,16 +47,7 @@ const getProductById = ( req, res ) => {
   } )
 };
 
-const getStylesById = ( req, res ) => {
-  const id = req.params.id;
-  pool.pool.query( `SELECT * FROM products inner join styles ON products.id = styles.product_id inner join photos on `, ( err, results ) => {
-    if ( err ) {
-      res.status( 404 );
-    } else {
-      res.status( 200 ).json( results.rows[ 0 ] );
-    }
-  } )
-};
+
 
 const getReviewsById = ( req, res ) => {
   const id = req.params.id;
@@ -69,9 +60,45 @@ const getReviewsById = ( req, res ) => {
   })
 }
 
-const test2 = ( req, res ) => {
-  console.log('dfh')
-  pool.pool.query( `SELECT s.styleId_productId, JSON_AGG(JSON_BUILD_OBJECT('style_id', s.style_id, 'name', s.name, 'original_price', s.original_price, 'sale_price', s.sale_price, 'default?', s."default?", JSON_AGG(JSON_BUILD_OBJECT('thumbnail_url', p.thumbnail_url, 'url', p.url)) photos from styles s left join photos p on s.style_id = p.photoId_styleId)) as results FROM styles s where s.styleId_productId = 4 GROUP BY s.styleId_productId;`, ( err, results ) => {
+const getStylesById = ( req, res ) => {
+  const id = req.params.id;
+  pool.pool.query( `
+  with photos as (
+    select p.photoId_styleId, json_agg(
+      json_build_object(
+        'url', p.url,
+        'thumbnail_url', p.thumbnail_url
+      )
+    ) photos from photos p
+    group by p.photoId_styleId
+  ),
+  skus as (
+    select
+    sk.skuId_styleId,
+    json_object_agg(
+      sk.skuId, json_build_object(
+        'quantity', sk.quantity,
+        'size', sk.size
+        )
+    ) "skus" from skus sk
+    group by sk.skuId_styleId
+  )
+  select s.styleId_productId as product_id, json_agg(
+    json_build_object(
+      'style_id', s.style_id,
+      'name', s.name,
+      'original_price', s.original_price,
+      'sale_price', s.sale_price,
+      'default?', s."default?",
+      'photos', photos,
+      'skus', skus
+    )
+  ) results from styles s left join photos
+    on s.style_id = photos.photoId_styleId
+    left join skus on s.style_id = skus.skuId_styleId
+    where s.styleId_productId = ${ id }
+    group by s.styleId_productId;`,
+    ( err, results ) => {
     if ( err ) {
       res.status( 404 );
     } else {
@@ -82,115 +109,41 @@ const test2 = ( req, res ) => {
 
 
 /*
-SELECT
-JSON_BUILD_OBJECT(
-  'product_id', styles.styledId_productId,
-)
-
-
-SELECT JSON_AGG(
-  JSON_BUILD_OBJECT(
-    'style_id', styles.style_id,
-    'name', styles.name,
-    'original_price', styles.original_price,
-    'sale_price', styles.sale_price,
-    'default?', styles."default?"
-  )
-) as results FROM styles
-left join (
-  select
-    JSON_AGG(
-      JSON_BUILD_OBJECT(
-        'thumbnail_url', photos.thumbnail_url,
-        'url', photos.url
+`
+  with photos as (
+    select p.photoId_styleId, json_agg(
+      json_build_object(
+        'url', p.url,
+        'thumbnail_url', p.thumbnail_url
+    )) photos from photos p group by p.photoId_styleId
+  ),
+  skuss as (
+      select sk.skuId_styleId,
+         json_build_object(
+      sk.skuId, json_build_object(
+        'quantity', sk.quantity,
+        'size', sk.size
       )
-    )) as photos FROM photos p on styles.style_id = photos.photoId_styleId where styles.styleId_productId = 4;
+
+      )skuss from skus sk group by sk.skuId_styleId, sk.skuId
+
+  )
+  select s.styleId_productId as product_id, json_agg(
+    json_build_object(
+      'style_id', s.style_id,
+      'name', s.name,
+      'original_price', s.original_price,
+      'default?', s."default?",
+      'photos', photos,
+      'skus', skuss
+    )) results from styles s left join photos
+    on s.style_id = photos.photoId_styleId left join skuss on s.style_id = skuss.skuId_styleId
+    where s.styleId_productId = 1 group by s.styleId_productId;`
 */
 
 
 /*
-with photos as (
-  select
-    json_agg(
-      json_build_object(
-        'thumbnail_url', p.thumbnail_url,
-        'url', p.url
-      )
-    ) photos
-  from photos p
-)
-select styles.styleId_productId, json_agg(
-  json_build_obj(
-    'style_id', s.style_id,
-    'name', s.name
-  )
-) results
-from styles s left join photos p on s.style_id = p.photoId_styleId where s.style_id = 3 Group by 1;
 
-*/
-BOTTOM UP photos and styles and skus
-with skuss as (
-  select
-  styles.style_id,
-  json_build_object(
-    skus.skuId, json_build_object(
-      'quantity', skus.quantity,
-      'size', skus.size
-    )) as skus
-    from skus group by 1
-),
-photoss as (
-  select
-    styles.style_id,
-    json_agg(
-      json_build_object(
-        'thumbnail_url', p.thumbnail_url,
-        'url', p.url
-      )
-    ) as photos
-    from photos p group by 1
-)
-select s.styleId_productId, json_agg(
-  json_build_obj(
-    'style_id', s.style_id,
-    'name', s.name,
-    'original_price', s.original_price,
-    'sale_price', s.sale_price,
-    'default?', s."default?",
-    'photos', photoss,
-    'skus', skuss
-  )
-) as results from styles s
-left join photos p on s.style_id = p.photoid_styleId
-left join skus on s.style_id = skus.skuId_styleId where s.style_id = 4
-group by s.styleId_productId;
-
-
-BOTTOM UP photos and styles only
-
-with photoss as (
-  select
-    styles.style_id,
-    json_agg(
-      json_build_object(
-        'thumbnail_url', p.thumbnail_url,
-        'url', p.url
-      )
-    ) as photos from photos p
-    group by styles.style_id
-)
-select s.styleId_productId, json_agg(
-  json_build_obj(
-    'style_id', s.style_id,
-    'name', s.name,
-    'original_price', s.original_price,
-    'sale_price', s.sale_price,
-    'default?', s."default?",
-    'photos', photoss
-  )
-) as results from styles s
-left join photos p on s.style_id = p.photoid where s.style_id = 4
-group by s.styleId_productId;
 
 
 
@@ -218,11 +171,16 @@ from styles s left join (
   )photos on photos.photoId_styleId = s.style_id
 
 
+*/
+
+
+
+
+
 
 module.exports = {
   getProductById,
   getStylesById,
   getReviewsById,
-  test2,
 
   }

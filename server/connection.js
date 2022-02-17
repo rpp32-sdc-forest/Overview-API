@@ -6,7 +6,6 @@ const pool = new Pool( {
   user: 'joe',
   database: 'sdc2',
   port: 5432,
-  connectionTimeoutMillis: 2000,
 } );
 
 module.exports = {

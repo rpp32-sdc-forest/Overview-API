@@ -14,7 +14,7 @@ app.get( '/styles/:id', api.getStylesById );
 
 app.get( '/reviews/:id', api.getReviewsById );
 
-app.get( '/test2', api.test2 );
+
 
 
 

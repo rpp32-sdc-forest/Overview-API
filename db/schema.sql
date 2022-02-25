@@ -12,7 +12,7 @@ CREATE TABLE products(
   default_price INT NOT NULL
 );
 
-COPY products FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/csvFiles/product.csv' DELIMITER ',' CSV HEADER;
+COPY products FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/db/csvFiles/product.csv' DELIMITER ',' CSV HEADER;
 /*need to index*/
 
 CREATE TABLE features(
@@ -22,7 +22,7 @@ CREATE TABLE features(
   value VARCHAR (50)
 );
 
-COPY features FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/csvFiles/features.csv' DELIMITER ',' CSV HEADER;
+COPY features FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/db/csvFiles/features.csv' DELIMITER ',' CSV HEADER;
 
 CREATE TABLE styles(
   style_id SERIAL NOT NULL PRIMARY KEY,
@@ -32,7 +32,7 @@ CREATE TABLE styles(
   original_price INT NOT NULL,
   "default?" BOOLEAN
 );
-COPY styles FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/csvFiles/styles.csv' DELIMITER ',' CSV HEADER;
+COPY styles FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/db/csvFiles/styles.csv' DELIMITER ',' CSV HEADER;
 
 
 CREATE TABLE photos(
@@ -42,7 +42,7 @@ CREATE TABLE photos(
   thumbnail_url VARCHAR NOT NULL
 );
 
-COPY photos FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/csvFiles/photos.csv' DELIMITER ',' CSV HEADER;
+COPY photos FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/db/csvFiles/photos.csv' DELIMITER ',' CSV HEADER;
 
 
 CREATE TABLE skus(
@@ -52,7 +52,14 @@ CREATE TABLE skus(
   quantity SMALLINT NOT NULL
 );
 
-COPY skus FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/csvFiles/skus.csv' DELIMITER ',' CSV HEADER;
+CREATE TABLE cart(
+  id SERIAL NOT NULL PRIMARY KEY,
+  session INT NOT NULL,
+  sku_id INT NOT NULL,
+  count SMALLINT NOT NULL
+);
+
+COPY skus FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/db/csvFiles/skus.csv' DELIMITER ',' CSV HEADER;
 
 
 CREATE INDEX features_index ON features(featureId_productId);

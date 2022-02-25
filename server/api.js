@@ -1,68 +1,97 @@
-const pool = require( './connection.js' );
+const db = require( './connection.js' );
 
-// const getProductById = ( req, res ) => {
-//   const id = req.params.id;
-//   pool.pool.query( `SELECT * FROM overview.products inner join overview.features on products.id = features.product_id WHERE products.id = ${id}`, ( err, results ) => {
-//     if ( err ) {
-//       res.status( 404 );
-//     } else {
-//       features = [];
-//       for ( let i = 0; i < results.rows.length; i++ ) {
-//         var oneFeature = { feature: results.rows[i].feature, value: results.rows[i].value };
-//         features.push( oneFeature );
-//       }
-//       const product = results.rows[ 0 ];
-//       const obj = {
-//         id: product.product_id,
-//         name: product.name,
-//         slogan: product.slogan,
-//         description: product.description,
-//         category: product.category,
-//         default_price: product.default_price,
-//         features
-//       };
-//       res.status( 200 ).json( obj );
-//     }
-//   } )
-// };
-
-const getProductById = ( req, res ) => {
+const getProducts = ( req, res ) => {
+  const count = req.params.count;
   const id = req.params.id;
-  pool.pool.query( `SELECT
-  p.id, p.name, p.slogan, p.description, p.category, p.default_price,
-  json_agg(
-    json_build_object(
-      'feature', f.feature, 'value', f.value
+  const style = req.params.styles;
+  console.log('req query', req.query);
+  let queryString;
+  console.log('what', req.params)
+  if ( !id && !count ) {
+    queryString = 'SELECT * FROM products LIMIT 5';
+  } else if ( count ) {
+    queryString = `SELECT * FROM products LIMIT ${ count }`;
+  } else if ( id && !style ) {
+    queryString = `SELECT
+    p.id, p.name, p.slogan, p.description, p.category, p.default_price,
+    json_agg(
+      json_build_object(
+        'feature', f.feature, 'value', f.value
+      )
+    ) AS features FROM products p
+    LEFT JOIN features f
+    ON f.featureId_productId = p.id
+    WHERE p.id = ${ id }
+    GROUP BY p.id;`
+  } else if ( id && style === 'styles') {
+    queryString = `with photos as (
+      select p.photoId_styleId, json_agg(
+        json_build_object(
+          'url', p.url,
+          'thumbnail_url', p.thumbnail_url
+        )
+      ) photos from photos p
+      group by p.photoId_styleId
+    ),
+    skus as (
+      select
+      sk.skuId_styleId,
+      json_object_agg(
+        sk.skuId, json_build_object(
+          'quantity', sk.quantity,
+          'size', sk.size
+          )
+      ) "skus" from skus sk
+      group by sk.skuId_styleId
     )
-  ) AS features FROM products p
-  LEFT JOIN features f
-  ON f.featureId_productId = p.id
-  WHERE p.id = ${id}
-  GROUP BY p.id;`, ( err, results ) => {
+    select s.styleId_productId as product_id, json_agg(
+      json_build_object(
+        'style_id', s.style_id,
+        'name', s.name,
+        'original_price', s.original_price,
+        'sale_price', s.sale_price,
+        'default?', s."default?",
+        'photos', photos,
+        'skus', skus
+      )
+    ) results from styles s left join photos
+      on s.style_id = photos.photoId_styleId
+      left join skus on s.style_id = skus.skuId_styleId
+      where s.styleId_productId = ${ id }
+      group by s.styleId_productId;`
+  }
+  console.log('querystring', queryString);
+  db.pool.query( queryString, ( err, results ) => {
     if ( err ) {
       res.status( 404 );
     } else {
-      res.status( 200 ).json( results.rows[ 0 ] );
+      let data;
+      if ( results.rows.length > 1 ) {
+        data = results.rows;
+      } else {
+        data = results.rows[ 0 ];
+      }
+      res.status( 200 ).json( data );
     }
-  } )
+  })
 };
 
 
 
-const getReviewsById = ( req, res ) => {
-  const id = req.params.id;
-  pool.pool.query('', ( err, results ) => {
-    if ( err ) {
-      res.status( 404 );
-    } else {
-      res.status( 200 ).json( results.rows );
-    }
-  })
-}
+// const getReviewsById = ( req, res ) => {
+//   const id = req.params.id;
+//   db.pool.query('', ( err, results ) => {
+//     if ( err ) {
+//       res.status( 404 );
+//     } else {
+//       res.status( 200 ).json( results.rows );
+//     }
+//   })
+// };
 
 const getStylesById = ( req, res ) => {
   const id = req.params.id;
-  pool.pool.query( `
+  db.pool.query( `
   with photos as (
     select p.photoId_styleId, json_agg(
       json_build_object(
@@ -104,52 +133,46 @@ const getStylesById = ( req, res ) => {
     } else {
       res.status( 200 ).json( results.rows[0] );
     }
-  } )
+  })
 };
 
 
+
+const getCart = ( req, res ) => {
+  const id = req.params.id;
+  queryString = `SELECT sku_id, count FROM cart where session = ${ id }`;
+  db.pool.query( queryString, (err, result) => {
+    if ( err ) {
+      console.log('error getting from cart', err);
+    } else {
+      res.status( 200 ).json( results.rows );
+    }
+  })
+}
+
+const postCart = ( req, res ) => {
+  const session = req.body.session;
+  const skuId = req.body.sku;
+  const count = req.body.count;
+  queryString = `INSERT INTO cart(session, sku_id, count) VALUES (${session}, ${skuId}, ${count})`;
+  db.pool.query( queryString, ( err, results ) => {
+    if ( err ) {
+      console.log( 'error posting into cart', err );
+    } else {
+      res.status( 201 ).json( results.rows );
+    }
+  })
+}
+
+
+
+
+
+
+
+
 /*
-`
-  with photos as (
-    select p.photoId_styleId, json_agg(
-      json_build_object(
-        'url', p.url,
-        'thumbnail_url', p.thumbnail_url
-    )) photos from photos p group by p.photoId_styleId
-  ),
-  skuss as (
-      select sk.skuId_styleId,
-         json_build_object(
-      sk.skuId, json_build_object(
-        'quantity', sk.quantity,
-        'size', sk.size
-      )
-
-      )skuss from skus sk group by sk.skuId_styleId, sk.skuId
-
-  )
-  select s.styleId_productId as product_id, json_agg(
-    json_build_object(
-      'style_id', s.style_id,
-      'name', s.name,
-      'original_price', s.original_price,
-      'default?', s."default?",
-      'photos', photos,
-      'skus', skuss
-    )) results from styles s left join photos
-    on s.style_id = photos.photoId_styleId left join skuss on s.style_id = skuss.skuId_styleId
-    where s.styleId_productId = 1 group by s.styleId_productId;`
-*/
-
-
-/*
-
-
-
-
 //TOP DOWN
-
-
 select json_build_object('product_id', s.styleId_productId,
   'results', json_agg(
     json_build_object(
@@ -169,8 +192,6 @@ from styles s left join (
     'url', photos.url
   )) as photos1 from photos p group by s.style_id
   )photos on photos.photoId_styleId = s.style_id
-
-
 */
 
 
@@ -179,8 +200,8 @@ from styles s left join (
 
 
 module.exports = {
-  getProductById,
+  getProducts,
   getStylesById,
-  getReviewsById,
-
-  }
+  getCart,
+  postCart,
+}

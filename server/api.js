@@ -21,7 +21,11 @@ const getProduct = (req, res) => {
       return client.query( queryString )
       .then( data => {
         client.release();
-        res.status(200).json(data.rows);
+        if ( data.length < 1 ) {
+          res.status(200).send('Product does not exist');
+        } else {
+          res.status(200).json(data.rows);
+        }
       })
       .catch( err => {
         res.status(404).json(err);
@@ -29,6 +33,7 @@ const getProduct = (req, res) => {
     })
   } else if (id && styles === 'styles') {
     let allIds;
+    console.log('hereee')
     db.pool.connect()
     .then( client => {
       return client.query(`select * from styles where styleId_productId = ${id}`)
@@ -46,9 +51,15 @@ const getProduct = (req, res) => {
           client.query(`CREATE OR REPLACE VIEW photo_view AS
           SELECT * FROM photos WHERE styleId IN ${ allIds }`);
         })
+        .catch( (err) => {
+          console.log('error creating photoview');
+        } )
         .then( () => {
           client.query(`CREATE OR REPLACE VIEW sku_view AS
           SELECT * FROM skus where styleId IN ${ allIds }`);
+        })
+        .catch( err => {
+          console.log('error creating sku view');
         })
         .then( () => {
           let queryString = `WITH photos AS (
@@ -90,12 +101,17 @@ const getProduct = (req, res) => {
         })
         .then( data => {
           client.release();
-          res.status(200).json(data.rows);
+          if ( data.length < 1 ) {
+            console.log('hello')
+            res.status( 200 ).json( 'Product does not exist' );
+          } else {
+            res.status(200).json(data.rows);
+          }
         })
-        .catch( err => {
+        .catch( (err) => {
           client.release();
           console.log('error yo', err)
-          res.status(404).json(err);
+          //res.status(404).json(err);
         })
     })
   }

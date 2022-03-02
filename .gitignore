@@ -7,6 +7,11 @@ yarn-error.log*
 lerna-debug.log*
 
 
+# SH files
+*.SH
+# PEM files
+*.PEM
+
 # CSV files
 *.csv
 

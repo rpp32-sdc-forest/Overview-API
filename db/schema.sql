@@ -13,7 +13,7 @@ CREATE TABLE products(
 );
 
 COPY products FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/db/csvFiles/product.csv' DELIMITER ',' CSV HEADER;
-/*need to index*/
+
 
 CREATE TABLE features(
   featureId SERIAL NOT NULL PRIMARY KEY,
@@ -37,7 +37,7 @@ COPY styles FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/db/csvFil
 
 CREATE TABLE photos(
   photoId SERIAL NOT NULL PRIMARY KEY,
-  photoId_styleId INT NOT NULL REFERENCES styles (style_id),
+  styleId INT NOT NULL REFERENCES styles (style_id),
   url VARCHAR NOT NULL,
   thumbnail_url VARCHAR NOT NULL
 );
@@ -47,14 +47,14 @@ COPY photos FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/db/csvFil
 
 CREATE TABLE skus(
   skuId SERIAL NOT NULL PRIMARY KEY,
-  skuId_styleId INT NOT NULL REFERENCES styles (style_id),
+  styleId INT NOT NULL REFERENCES styles (style_id),
   size VARCHAR (8) NOT NULL,
   quantity SMALLINT NOT NULL
 );
 
 CREATE TABLE cart(
   id SERIAL NOT NULL PRIMARY KEY,
-  session INT NOT NULL,
+  sessionid INT NOT NULL,
   sku_id INT NOT NULL,
   count SMALLINT NOT NULL
 );
@@ -64,8 +64,21 @@ COPY skus FROM '/Users/joe/Documents/RPP32/senior-phase/Overview-API/db/csvFiles
 
 CREATE INDEX features_index ON features(featureId_productId);
 CREATE INDEX styles_index ON styles(styleId_productId);
-CREATE INDEX photos_index ON photos(photoId_styleId);
-CREATE INDEX skus_index ON skus(skuId_styleId);
+CREATE INDEX photos_index ON photos(styleId);
+CREATE INDEX skus_index ON skus(styleId);
+CREATE INDEX cart_index ON cart(sessionid);
+
+-- CREATE INDEX styles_index ON styles using hash (styleId_productId);
+-- CREATE INDEX photos_index ON photos using hash (styleId);
+-- CREATE INDEX skus_index ON skus using hash (styleId);
+
+
+
+
+-- CREATE INDEX photos_index ON photos(styleId, );
+-- CREATE INDEX skus_index ON skus(styleId, skuId);
+
+
 
 /*
 psql postgres

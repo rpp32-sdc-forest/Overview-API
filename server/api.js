@@ -1,21 +1,34 @@
 const db = require( './connection.js' );
 const helpers = require( './helpers.js' );
+const redis = require( 'redis' );
+const redisPort = 6379;
+const redisClient = redis.createClient(redisPort);
+redisClient.connect();
+
+redisClient.on('connect', () => {
+  console.log('connected to redis');
+});
+redisClient.on('error', (err) =>{
+  console.log(err);
+});
+
+
 
 const getProduct = (req, res) => {
+
   const id = req.params.id;
   const styles = req.params.styles;
-  if (id && !styles) {
+  if (id && (!styles || styles === '\n')) {
     queryString = `SELECT
     p.id, p.name, p.slogan, p.description, p.category, p.default_price,
     json_agg(
       json_build_object(
         'feature', f.feature, 'value', f.value
-        )
-        ) AS features FROM products p
-        LEFT JOIN features f
-        ON f.featureId_productId = p.id
-        WHERE p.id = ${ id }
-        GROUP BY p.id;`
+      )) AS features FROM products p
+      LEFT JOIN features f
+      ON f.featureId_productId = p.id
+      WHERE p.id = ${ id }
+      GROUP BY p.id;`
     db.pool.connect()
     .then( client => {
       return client.query( queryString )
@@ -24,96 +37,112 @@ const getProduct = (req, res) => {
         if ( data.length < 1 ) {
           res.status(200).send('Product does not exist');
         } else {
-          res.status(200).json(data.rows);
+          res.status(200).json(data.rows[0]);
         }
       })
       .catch( err => {
         res.status(404).json(err);
       })
     })
-  } else if (id && styles === 'styles') {
-    let allIds;
-    console.log('hereee')
-    db.pool.connect()
-    .then( client => {
-      return client.query(`select * from styles where styleId_productId = ${id}`)
-        .then( data => {
-          //client.release()
-          //console.log('hello', data.rows)
-          allStyleIds = [];
-          data.rows.forEach( item => {
-            allStyleIds.push( item.style_id );
-          });
-          let combined = helpers.combineIds( allStyleIds );
-          allIds = combined;
-        })
-        .then( () => {
-          client.query(`CREATE OR REPLACE VIEW photo_view AS
-          SELECT * FROM photos WHERE styleId IN ${ allIds }`);
-        })
-        .catch( (err) => {
-          console.log('error creating photoview');
-        } )
-        .then( () => {
-          client.query(`CREATE OR REPLACE VIEW sku_view AS
-          SELECT * FROM skus where styleId IN ${ allIds }`);
-        })
-        .catch( err => {
-          console.log('error creating sku view');
-        })
-        .then( () => {
-          let queryString = `WITH photos AS (
-            SELECT p.styleId, json_agg(
-              json_build_object(
-                'url', p.url,
-                'thumbnail_url', p.thumbnail_url
+  } else if (id && (styles === 'styles' || styles === 'styles\n')) {
+      let allIds;
+      redisClient.get(id)
+      .then((data) => {
+        if (data) {
+          console.log('redis id 1', data);
+          res.status( 200 ).send( JSON.parse( data ) );
+        } else {
+          db.pool.connect()
+          .then( client => {
+            return client.query(`select * from styles where styleId_productId = ${id}`)
+            .then( data => {
+              if (data.rows.length > 0) {
+                allStyleIds = [];
+                data.rows.forEach( item => {
+                  allStyleIds.push( item.style_id );
+                });
+                let combined = helpers.combineIds( allStyleIds );
+                allIds = combined;
+              } else {
+                allIds = '(1, 2)';
+              }
+            })
+            .then( () => {
+              client.query(`CREATE OR REPLACE VIEW photo_view AS
+              SELECT * FROM photos WHERE styleId IN ${ allIds }`);
+            })
+            .then( () => {
+              client.query(`CREATE OR REPLACE VIEW sku_view AS
+              SELECT * FROM skus where styleId IN ${ allIds }`);
+            })
+            .then( () => {
+              let queryString = `WITH photos AS (
+                SELECT p.styleId, json_agg(
+                  json_build_object(
+                    'url', p.url,
+                    'thumbnail_url', p.thumbnail_url
+                  )
+                ) photos FROM photo_view p
+                GROUP BY p.styleId
+              ),
+              skus AS (
+                SELECT
+                sk.styleId,
+                json_object_agg(
+                  sk.skuId, json_build_object(
+                    'quantity', sk.quantity,
+                    'size', sk.size
+                    )
+                ) "skus" FROM sku_view sk
+                GROUP BY sk.styleId
               )
-            ) photos FROM photo_view p
-            GROUP BY p.styleId
-          ),
-          skus AS (
-            SELECT
-            sk.styleId,
-            json_object_agg(
-              sk.skuId, json_build_object(
-                'quantity', sk.quantity,
-                'size', sk.size
+              SELECT s.styleId_productId AS product_id, json_agg(
+                json_build_object(
+                  'style_id', s.style_id,
+                  'name', s.name,
+                  'original_price', s.original_price,
+                  'sale_price', s.sale_price,
+                  'default?', s."default?",
+                  'photos', photos,
+                  'skus', skus
                 )
-            ) "skus" FROM sku_view sk
-            GROUP BY sk.styleId
-          )
-          SELECT s.styleId_productId AS product_id, json_agg(
-            json_build_object(
-              'style_id', s.style_id,
-              'name', s.name,
-              'original_price', s.original_price,
-              'sale_price', s.sale_price,
-              'default?', s."default?",
-              'photos', photos,
-              'skus', skus
-            )
-          ) results FROM styles s LEFT JOIN photos
-            ON s.style_id = photos.styleId
-            LEFT JOIN skus ON s.style_id = skus.styleId
-            WHERE s.styleId_productId = ${ id }
-            GROUP BY s.styleId_productId;`
-          return client.query( queryString );
-        })
-        .then( data => {
-          client.release();
-          if ( data.length < 1 ) {
-            console.log('hello')
-            res.status( 200 ).json( 'Product does not exist' );
-          } else {
-            res.status(200).json(data.rows);
-          }
-        })
-        .catch( (err) => {
-          client.release();
-          console.log('error yo', err)
-          //res.status(404).json(err);
-        })
-    })
+              ) results FROM styles s LEFT JOIN photos
+                ON s.style_id = photos.styleId
+                LEFT JOIN skus ON s.style_id = skus.styleId
+                WHERE s.styleId_productId = ${ id }
+                GROUP BY s.styleId_productId;`
+              return client.query( queryString );
+            })
+            .then( data => {
+              client.release();
+              if ( data.length < 1 ) {
+                let emptyResults = {product_id: id, results: []};
+                redisClient.set( id, JSON.stringify( emptyResults ) );
+                res.status( 200 ).json( emptyResults );
+              } else {
+                console.log(data.rows[0]);
+                redisClient.set( id, JSON.stringify( data.rows[0]) );
+                res.status( 200 ).json( data.rows[0] );
+              }
+            })
+            .catch( (err) => {
+              client.release();
+              console.log('error yo', err)
+              //res.status(404).json(err);
+            })
+          })
+        }
+      })
+      .catch((err) => {
+        console.log('err', err)
+      })
+
+
+
+
+
+
+
   }
 }
 
@@ -217,3 +246,5 @@ module.exports = {
   getCart,
   postCart,
 }
+
+

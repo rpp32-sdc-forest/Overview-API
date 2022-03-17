@@ -2,12 +2,12 @@ import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 
 export default () => {
-  const randomId = Math.floor(Math.random() * 1000011);
+  const randomId = Math.floor(Math.random() * 10000);
   // const options = {
   //   vus: 1000,
   //   duration: '30s',
   // };
-  const url = `http://localhost:8080/product/${randomId}/styles`;
+  const url = `http://localhost:8080/pro/product/${randomId}/styles/`;
 
   http.get( url );
 }

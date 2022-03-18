@@ -2,7 +2,12 @@ import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 
 export default () => {
-  const randomId = Math.floor(Math.random() * 10000);
+  const getRandomInt = (min, max) => {
+    min = Math.ceil( min );
+    max = Math.floor( max );
+    return Math.floor( Math.random() * ( max - min ) + min );
+  };
+  const randomId = getRandomInt(900000, 1000000);
   // const options = {
   //   vus: 1000,
   //   duration: '30s',
